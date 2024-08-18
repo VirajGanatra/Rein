@@ -38,7 +38,7 @@ class REINFORCE(nn.Module):
         return returns
 
     def _compute_loss(self, states, actions, returns):
-        states = torch.tensor(states, dtype=torch.float)
+        states = torch.tensor(np.array(states), dtype=torch.float)
         actions = torch.tensor(actions)
         log_probs = self.policy.log_probs(states, actions)
         return -(log_probs * returns).sum()

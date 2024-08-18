@@ -20,5 +20,6 @@ class CartPoleEnv(Environment):
     def step(self, action):
         return self.env.step(action)
 
+
     def render(self):
         self.env.render()

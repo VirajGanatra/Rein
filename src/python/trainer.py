@@ -13,13 +13,13 @@ class Trainer:
 
     def train(self):
         for episode in range(self.episodes):
-            state = self.env.reset()
+            state, _ = self.env.reset()
             episode_reward = 0
             states, actions, rewards = [], [], []
 
             for step in range(self.max_steps):
                 action, log_prob = self.agent.policy.select_action(state)
-                next_state, reward, done, _ = self.env.step(action)
+                next_state, reward, terminated, truncated, _ = self.env.step(action)
 
                 states.append(state)
                 actions.append(action)
@@ -28,7 +28,7 @@ class Trainer:
                 state = next_state
                 episode_reward += reward
 
-                if done:
+                if terminated or truncated:
                     break
 
             self.rewards_history.append(episode_reward)
@@ -40,11 +40,10 @@ class Trainer:
 
             if episode % 100 == 0:
                 self.plot_rewards()
-
     def plot_rewards(self):
         fig = go.Figure()
         fig.add_trace(go.Scatter(y=list(self.rewards_history), mode='lines', name='Average Reward'))
-        fig.update_layout(title='Average Reward over Last 100 Episodes',
+        fig.update_layout(title='Average Reward over Last 5000 Episodes',
                           xaxis_title='Episode',
                           yaxis_title='Average Reward')
         fig.write_image(f"rewards_plot_episode_{len(self.rewards_history)}.png")

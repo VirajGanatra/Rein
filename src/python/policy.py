@@ -28,9 +28,17 @@ class NNPolicy(nn.Module, Policy):
         x = self.fc3(x)
         return F.softmax(x, dim=-1)
 
+
     def select_action(self, state):
-        state = torch.from_numpy(state).float().unsqueeze(0)
-        probs = self.forward(state)
+        state_array = np.array(state, dtype=np.float32)
+        state_tensor = torch.from_numpy(state_array).float().unsqueeze(0)
+        probs = self.forward(state_tensor)
         dist = Categorical(probs)
         action = dist.sample()
         return action.item(), dist.log_prob(action)
+
+    def log_probs(self, states, actions):
+        states_tensor = states.clone().detach().float()
+        probs = self.forward(states_tensor)
+        dist = Categorical(probs)
+        return dist.log_prob(actions.clone().detach())
