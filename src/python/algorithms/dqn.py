@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-import replay_buffer # TODO: Implement replay_buffer.cpp
+from replay_buffer import ReplayBuffer
 
 class DQN(nn.Module):
     def __init__(self, state_size, action_size, gamma=0.99, learning_rate=1e-3, capacity=10000, epsilon=0.1,
@@ -12,9 +12,8 @@ class DQN(nn.Module):
         self.action_size = action_size
         self.gamma = gamma
         self.learning_rate = learning_rate
-        self.memory = replay_buffer.ReplayBuffer(capacity)
+        self.memory = ReplayBuffer(capacity)  # Initialize replay buffer
 
-        # These govern the chance of selecting a random action - it decays over time as the agent learns
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
@@ -35,7 +34,7 @@ class DQN(nn.Module):
         return model
 
     def update_target_network(self):
-        self.target_network.load_state_dict(self.q_network.state_dict()) # Copy the weights from the Q network to the target network
+        self.target_network.load_state_dict(self.q_network.state_dict())
 
     def select_action(self, state):
         if np.random.rand() < self.epsilon:
@@ -53,7 +52,6 @@ class DQN(nn.Module):
         next_states = torch.FloatTensor(next_states)
         dones = torch.FloatTensor(dones)
 
-        # Compute Q(s_t, a) - the model computes Q(s_t), select columns of actions taken
         current_q_values = self.q_network(states).gather(1, actions)
 
         with torch.no_grad():
@@ -67,7 +65,7 @@ class DQN(nn.Module):
         if self.memory.size() < batch_size:
             return
 
-        batch = self.memory.sample(batch_size)
+        batch = self.memory.random_batch(batch_size)  # Sample batch from replay buffer
         loss = self.compute_loss(batch)
 
         self.optimizer.zero_grad()
@@ -76,5 +74,3 @@ class DQN(nn.Module):
         self.optimizer.step()
 
         return loss.item()
-
-
