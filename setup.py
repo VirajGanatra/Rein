@@ -15,7 +15,7 @@ replay_buffer_module = Extension(
         pybind11.get_include(user=True)
     ],
     language='c++',
-    extra_compile_args=['-std=c++14']
+    extra_compile_args=['-std=c++23']
 )
 
 # Setup script
