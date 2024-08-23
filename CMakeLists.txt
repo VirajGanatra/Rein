@@ -3,17 +3,14 @@ project(Rein)
 
 set(CMAKE_CXX_STANDARD 14)
 
+find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter Development)
 
 add_subdirectory(extern/pybind11)
 
-
 include_directories(src/cpp/include)
 include_directories(extern/pybind11/include)
-
 
 pybind11_add_module(replay_buffer
         src/cpp/src/bindings.cpp
         src/cpp/src/replay_buffer.cpp
 )
-
-
