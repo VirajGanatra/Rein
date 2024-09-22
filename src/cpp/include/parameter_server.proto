@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+service ParameterServer {
+    rpc UpdateModel (ModelUpdate) returns (UpdateResponse);
+    rpc GetModel (GetModelRequest) returns (Model);
+}
+
+message ModelUpdate {
+    repeated float weights = 1;
+}
+
+message UpdateResponse {
+    bool success = 1;
+}
+
+message GetModelRequest {}
+
+message Model {
+    repeated float weights = 1;
+}
