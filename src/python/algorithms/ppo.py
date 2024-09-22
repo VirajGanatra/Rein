@@ -3,13 +3,12 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 from replay_buffer import ReplayBuffer
-
+import ppo_core
 
 class PPO(nn.Module):
     def __init__(self, state_size, action_size, gamma=0.99, learning_rate=1e-3, capacity=10000, epsilon=0.1,
                  epsilon_decay=0.99, epsilon_min=0.01, clip_param=0.2, value_coeff=0.5, entropy_coeff=0.01,
-                 max_grad_norm=0.5,
-                 gae_lambda=0.95, *args, **kwargs):
+                 max_grad_norm=0.5, gae_lambda=0.95, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.state_size = state_size
         self.action_size = action_size
@@ -54,44 +53,24 @@ class PPO(nn.Module):
     def compute_advantages(self, states, next_states, rewards, dones):
         values = self.critic(states).squeeze()
         next_values = self.critic(next_states).squeeze()
-        deltas = rewards + self.gamma * next_values * (1 - dones) - values
-        advantages = self._compute_gae(deltas, dones)
+        rewards = rewards.detach().numpy()
+        dones = dones.detach().numpy()
+
+        advantages = ppo_core.compute_advantages(values.numpy(), next_values.numpy(), rewards, dones, self.gamma, self.gae_lambda)
+        advantages = torch.tensor(advantages, dtype=torch.float32)
         returns = advantages + values
 
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         return advantages, returns
 
-    def _compute_gae(self, deltas, dones):
-        advantages = torch.zeros_like(deltas)
-        advantage = 0.0
-        for t in range(len(deltas) - 1, -1, -1):
-            advantage = self.gamma * self.gae_lambda * (1 - dones[t]) * advantage + deltas[t]
-            advantages[t] = advantage
-        return advantages
-
-    def compute_actor_loss(self, states, actions, old_action_log_probs, advantages):
+    def compute_loss(self, states, actions, old_action_log_probs, advantages, returns):
         action_probs = self.actor(states)
         action_log_probs = torch.log(action_probs.gather(1, actions))
-        ratios = torch.exp(action_log_probs - old_action_log_probs)
-        surr1 = ratios * advantages
-        surr2 = torch.clamp(ratios, 1.0 - self.clip_param, 1.0 + self.clip_param) * advantages
-        actor_loss = -torch.min(surr1, surr2).mean()
-        return actor_loss, action_probs
 
-    def compute_critic_loss(self, states, returns):
-        value_pred = self.critic(states)
-        value_loss = nn.MSELoss()(value_pred, returns.unsqueeze(1))
-        return value_loss
-
-    def compute_entropy_loss(self, action_probs):
-        entropy_loss = -torch.sum(action_probs * torch.log(action_probs + 1e-8), dim=-1).mean()
-        return entropy_loss
-
-    def compute_loss(self, states, actions, old_action_log_probs, advantages, returns):
-        actor_loss, action_probs = self.compute_actor_loss(states, actions, old_action_log_probs, advantages)
-        critic_loss = self.compute_critic_loss(states, returns)
-        entropy_loss = self.compute_entropy_loss(action_probs)
+        actor_loss = ppo_core.compute_actor_loss(action_log_probs, old_action_log_probs, advantages, self.clip_param)
+        critic_loss = ppo_core.compute_critic_loss(self.critic(states), returns)
+        entropy_loss = ppo_core.compute_entropy_loss(action_probs)
 
         total_loss = actor_loss + self.value_coeff * critic_loss - self.entropy_coeff * entropy_loss
         return total_loss, actor_loss, critic_loss, entropy_loss
