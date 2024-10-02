@@ -7,19 +7,25 @@
 
 class ParameterServerImpl final : public ParameterServer::Service {
 public:
-    ParameterServerImpl() : model_weights(1000) {}
+    ParameterServerImpl() : model_weights(1000), update_queue(1000) {}
 
     grpc::Status UpdateModel(grpc::ServerContext* context, const ModelUpdate* request, UpdateResponse* response) override {
-        std::lock_guard<std::mutex> lock(model_mutex);
-        for (int i = 0; i < request->weights_size(); ++i) {
-            model_weights[i] = request->weights(i);
+        std::vector<float> weights(request->weights().begin(), request->weights().end());
+        if (update_queue.push(weights)) {
+            response->set_success(true);
+        } else {
+            response->set_success(false);
         }
-        response->set_success(true);
         return grpc::Status::OK;
     }
 
     grpc::Status GetModel(grpc::ServerContext* context, const GetModelRequest* request, Model* response) override {
-        std::lock_guard<std::mutex> lock(model_mutex);
+        std::vector<float> weights;
+        while (update_queue.pop(weights)) {
+            for (size_t i = 0; i < weights.size(); ++i) {
+                model_weights[i] = weights[i];
+            }
+        }
         for (float weight : model_weights) {
             response->add_weights(weight);
         }
@@ -28,7 +34,7 @@ public:
 
 private:
     std::vector<float> model_weights;
-    std::mutex model_mutex;
+    boost::lockfree::queue<std::vector<float>> update_queue;
 };
 
 void RunServer() {
