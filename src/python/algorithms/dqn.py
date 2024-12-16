@@ -12,7 +12,7 @@ class DQN(nn.Module):
         self.action_size = action_size
         self.gamma = gamma
         self.learning_rate = learning_rate
-        self.memory = ReplayBuffer(capacity)  # Initialize replay buffer
+        self.memory = ReplayBuffer(capacity)
 
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay

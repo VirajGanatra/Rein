@@ -3,11 +3,22 @@
 #include <boost/lockfree/queue.hpp>
 #include <vector>
 #include <thread>
-#include <mutex>
+#include <atomic>
 
 class ParameterServerImpl final : public ParameterServer::Service {
 public:
-    ParameterServerImpl() : model_weights(1000), update_queue(1000) {}
+    ParameterServerImpl() : model_weights(1000), update_queue(1000) {
+        // Start a background thread to process updates
+        update_thread = std::thread(&ParameterServerImpl::ProcessUpdates, this);
+    }
+
+    ~ParameterServerImpl() {
+        // Signal the update thread to stop and wait for it to finish
+        stop_updates = true;
+        if (update_thread.joinable()) {
+            update_thread.join();
+        }
+    }
 
     grpc::Status UpdateModel(grpc::ServerContext* context, const ModelUpdate* request, UpdateResponse* response) override {
         std::vector<float> weights(request->weights().begin(), request->weights().end());
@@ -20,12 +31,6 @@ public:
     }
 
     grpc::Status GetModel(grpc::ServerContext* context, const GetModelRequest* request, Model* response) override {
-        std::vector<float> weights;
-        while (update_queue.pop(weights)) {
-            for (size_t i = 0; i < weights.size(); ++i) {
-                model_weights[i] = weights[i];
-            }
-        }
         for (float weight : model_weights) {
             response->add_weights(weight);
         }
@@ -33,8 +38,22 @@ public:
     }
 
 private:
+    void ProcessUpdates() {
+        while (!stop_updates) {
+            std::vector<float> weights;
+            while (update_queue.pop(weights)) {
+                for (size_t i = 0; i < weights.size(); ++i) {
+                    model_weights[i] = weights[i];
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10)); // Adjust sleep duration as needed
+        }
+    }
+
     std::vector<float> model_weights;
     boost::lockfree::queue<std::vector<float>> update_queue;
+    std::thread update_thread;
+    std::atomic<bool> stop_updates{false};
 };
 
 void RunServer() {
